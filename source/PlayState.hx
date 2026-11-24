@@ -66,6 +66,8 @@ import Conductor.Rating;
 import hscript.Interp;
 import hscript.Parser;
 import HscriptHandler;
+import scripting.tscript.TScriptHandler;
+import scripting.tscript.TScriptInterp;
 #if sys
 import sys.io.File;
 import sys.FileSystem;
@@ -321,6 +323,7 @@ class PlayState extends MusicBeatState
 	// Lua shit
 	public static var instance:PlayState;
 	public var luaArray:Array<FunkinLua> = [];
+	public var tscriptArray:Array<TScriptHandler> = [];
 	public var hscriptArray:Map<String, Interp> = []; // it should work like luaarray. String is tag and interp is actual hscript interp
 	private var luaDebugGroup:FlxTypedGroup<DebugLuaText>;
 	public var introSoundsSuffix:String = '';
@@ -911,6 +914,13 @@ class PlayState extends MusicBeatState
 					{
 						luaArray.push(new FunkinLua(folder + file));
 						filesPushed.push(file);
+					} else if (file.endsWith('.tscript') && !filesPushed.contains(file)) {
+						var tscriptHandler = TScriptHandler.load(folder + file, File.getContent(folder + file), bindTScriptApi);
+						if (tscriptHandler != null) {
+							tscriptArray.push(tscriptHandler);
+							trace('TScript file loaded: ' + folder + file);
+						}
+						filesPushed.push(file);
 					} else if (file.endsWith('.hx') && !filesPushed.contains(file)) {
 						var exparser = new Parser();
 						exparser.allowMetadata = true;
@@ -1370,6 +1380,13 @@ class PlayState extends MusicBeatState
 					if(file.endsWith('.lua') && !filesPushed.contains(file))
 					{
 						luaArray.push(new FunkinLua(folder + file));
+						filesPushed.push(file);
+					} else if (file.endsWith('.tscript') && !filesPushed.contains(file)) {
+						var tscriptHandler = TScriptHandler.load(folder + file, File.getContent(folder + file), bindTScriptApi);
+						if (tscriptHandler != null) {
+							tscriptArray.push(tscriptHandler);
+							trace('TScript file loaded: ' + folder + file);
+						}
 						filesPushed.push(file);
 					} else if (file.endsWith('.hx') && !filesPushed.contains(file)) {
 						var exparser = new Parser();
@@ -5268,6 +5285,7 @@ class PlayState extends MusicBeatState
 			lua.stop();
 		}
 		luaArray = [];
+		tscriptArray = [];
 
 		if(!ClientPrefs.controllerMode)
 		{
@@ -5439,6 +5457,24 @@ class PlayState extends MusicBeatState
 		for (i in hscriptArray.keys()) {
 			callSingleHScript(func, args, i);	// it could be easier ig
 		}
+
+		for (script in tscriptArray)
+			script.call(func, args);
+	}
+
+	/** Functions that .tscript mods can call to read and change the game. */
+	function bindTScriptApi(interp:TScriptInterp) {
+		interp.define("debugPrint", function(args:Array<Dynamic>) {
+			trace(args.length > 0 ? Std.string(args[0]) : "");
+			return null;
+		});
+		interp.define("getProperty", function(args:Array<Dynamic>) {
+			return Reflect.getProperty(PlayState.instance, Std.string(args[0]));
+		});
+		interp.define("setProperty", function(args:Array<Dynamic>) {
+			Reflect.setProperty(PlayState.instance, Std.string(args[0]), args[1]);
+			return null;
+		});
 	}
 
 	override function sectionHit()
