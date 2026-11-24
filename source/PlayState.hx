@@ -3327,8 +3327,12 @@ class PlayState extends MusicBeatState
 					var secondsTotal:Int = Math.floor(songCalc / 1000);
 					if(secondsTotal < 0) secondsTotal = 0;
 
-					if(ClientPrefs.timeBarType != 'Song Name')
-						timeTxt.text = FlxStringUtil.formatTime(secondsTotal, false);
+					if(ClientPrefs.timeBarType != 'Song Name') {
+						// Only regenerate the text when the displayed second changes (once per second, not every frame)
+						var newTimeText:String = FlxStringUtil.formatTime(secondsTotal, false);
+						if (timeTxt.text != newTimeText)
+							timeTxt.text = newTimeText;
+					}
 				}
 			}
 
