@@ -35,6 +35,15 @@ class TScriptTest {
 		}
 	}
 
+	static function expectEq(name:String, expected:String, got:String):Void {
+		if (got == expected) {
+			passes++;
+		} else {
+			failures++;
+			Sys.println('FAIL $name\n  expected: ${expected}\n  got:      ${got}');
+		}
+	}
+
 	static function main() {
 		// Arithmetic and printing
 		check("arith", "7\n2.5\n-3", "print(1 + 2 * 3);\nprint(5 / 2);\nprint(-(1 + 2));");
@@ -77,6 +86,27 @@ class TScriptTest {
 
 		// Comments
 		check("comments", "1", "# hash comment\n// line comment\n/* block\ncomment */ print(1);");
+
+		// Handler: arguments are padded or dropped to match the script's function
+		var seen:Array<String> = [];
+		var h = scripting.tscript.TScriptHandler.load("mem.tscript", "function beat(a, b) { print(a); print(b); }\nfunction broken() { return 1 + nope; }", function(i) i.define("sink", function(_) return null));
+		if (h == null) {
+			failures++;
+			Sys.println("FAIL handler load");
+		} else {
+			passes++;
+			h.interp.define("print", function(args:Array<Dynamic>) { seen.push(args.length == 0 ? "" : Std.string(args[0])); return null; });
+			h.call("beat", [1, 2, 3]);
+			h.call("beat", [7]);
+			expectEq("handler padding", "1\n2\n7\nnull", seen.join("\n"));
+			// Runtime error is contained and logged once, later calls are no-ops
+			h.call("broken", []);
+			h.call("beat", [9]);
+			expectEq("handler contained", "1\n2\n7\nnull", seen.join("\n"));
+		}
+		// Load-time error returns null instead of throwing
+		var bad = scripting.tscript.TScriptHandler.load("bad.tscript", "print(;", function(_) {});
+		if (bad == null) passes++; else { failures++; Sys.println("FAIL handler bad load"); }
 
 		Sys.println('TScript tests: $passes passed, $failures failed');
 		Sys.exit(failures == 0 ? 0 : 1);
